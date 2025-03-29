@@ -311,5 +311,6 @@ class InventoryApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.iconbitmap("app_icon.ico")
     app = InventoryApp(root)
     root.mainloop()
