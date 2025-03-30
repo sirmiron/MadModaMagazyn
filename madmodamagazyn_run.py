@@ -12,7 +12,7 @@ class InventoryApp:
         self.master.title("Analiza stanu magazynu")
         self.all_data = []
 
-        # Frame for buttons (in Polish)
+        # Frame for buttons (Polish UI)
         button_frame = tk.Frame(master)
         button_frame.pack(padx=10, pady=10, fill=tk.X)
 
@@ -29,12 +29,13 @@ class InventoryApp:
         details_label = tk.Label(details_frame, text="Szczegóły")
         details_label.pack(anchor="w")
 
-        # Detailed table columns: "Odzież" renamed to "Towar", with Index as an integer.
-        self.details_columns = ["Towar", "Index", "Cena zakupu", "Szt.", "Rozmiar", "Cena przedaży", "Plik"]
+        # Detailed table columns: "Odzież" renamed to "Towar", Index as integer,
+        # prices are displayed with two decimals.
+        self.details_columns = ["Towar", "Index", "Cena zakupu", "Szt.", "Rozmiar", "Cena sprzedaży", "Plik"]
         self.details_tree = ttk.Treeview(details_frame, columns=self.details_columns, show="headings")
         for col in self.details_columns:
             self.details_tree.heading(col, text=col)
-            self.details_tree.column(col, width=100, anchor="center")
+            self.details_tree.column(col, width=100, anchor="w")  # left aligned
         self.details_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         details_scrollbar = tk.Scrollbar(details_frame, orient=tk.VERTICAL, command=self.details_tree.yview)
@@ -48,19 +49,19 @@ class InventoryApp:
         summary_label = tk.Label(summary_frame, text="Podsumowanie (grupowanie po Index, Rozmiar i Towar)")
         summary_label.pack(anchor="w")
 
-        # Summary table columns in the same order as detailed table
-        self.summary_columns = ["Towar", "Index", "Cena zakupu", "Szt.", "Rozmiar", "Cena przedaży", "Plik"]
+        # Summary table columns now in the same order as the detailed table.
+        self.summary_columns = ["Towar", "Index", "Cena zakupu", "Szt.", "Rozmiar", "Cena sprzedaży", "Plik"]
         self.summary_tree = ttk.Treeview(summary_frame, columns=self.summary_columns, show="headings")
         for col in self.summary_columns:
             self.summary_tree.heading(col, text=col)
-            self.summary_tree.column(col, width=100, anchor="center")
+            self.summary_tree.column(col, width=100, anchor="w")  # left aligned
         self.summary_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         summary_scrollbar = tk.Scrollbar(summary_frame, orient=tk.VERTICAL, command=self.summary_tree.yview)
         self.summary_tree.configure(yscrollcommand=summary_scrollbar.set)
         summary_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Frame for totals summary at the bottom of the window
+        # Frame for totals summary at the bottom
         totals_frame = tk.Frame(master)
         totals_frame.pack(padx=10, pady=(5, 10), fill=tk.X)
         self.totals_label = tk.Label(totals_frame, text="Podsumowanie całkowite: ")
@@ -69,14 +70,15 @@ class InventoryApp:
     def process_file(self, file_path):
         """
         Processes a single Excel file:
-         - Reads the inventory date from cell G2 (formatted, but not used in the result).
+         - Reads the inventory date from cell G2 (formatted, but not used further).
          - Iterates over rows starting from row 5.
          - Adds a row only if:
-             * The quantity ("Szt.") is greater than 0, and
+             * The quantity ("Szt.") is greater than 0 and
              * The product name (column A) is not empty.
-         - Renames the column "Komis" to "Cena przedaży".
+         - Renames the column "Komis" to "Cena sprzedaży".
          - If the value in column "Index" (cell C) is not numeric, it is set to 0.
-         - Stores the product name under the key "Towar" and converts "Index" to an integer.
+         - Converts "Index" to an integer.
+         - Converts "Cena zakupu" and "Cena sprzedaży" to floats (rounded to 2 decimals).
         """
         data_entries = []
         try:
@@ -86,7 +88,7 @@ class InventoryApp:
             messagebox.showerror("Błąd", f"Nie udało się otworzyć pliku:\n{file_path}\n{e}")
             return data_entries
 
-        # Read and format the inventory date (not used further)
+        # Read and format inventory date (not used further)
         inventory_date = ws['G2'].value
         if isinstance(inventory_date, (datetime.datetime, datetime.date)):
             inventory_date = inventory_date.strftime("%d-%m-%Y")
@@ -99,7 +101,7 @@ class InventoryApp:
             except IndexError:
                 continue
 
-            # Only add the row if quantity > 0 and product name is not empty
+            # Only add row if quantity > 0 and product name is not empty
             if (quantity is not None and isinstance(quantity, (int, float)) and quantity > 0) and \
                     (product_name is not None and str(product_name).strip() != ""):
                 # Convert "Index" to integer; if conversion fails, set to 0.
@@ -108,13 +110,23 @@ class InventoryApp:
                 except (ValueError, TypeError):
                     index_val = 0
 
+                # Convert prices to float with 2 decimals.
+                try:
+                    price_purchase = round(float(row[3]), 2)
+                except (ValueError, TypeError):
+                    price_purchase = 0.0
+                try:
+                    price_sale = round(float(row[6]), 2)
+                except (ValueError, TypeError):
+                    price_sale = 0.0
+
                 entry = {
                     "Towar": product_name,  # renamed from "Odzież"
                     "Index": index_val,
-                    "Cena zakupu": row[3],
+                    "Cena zakupu": price_purchase,
                     "Szt.": quantity,
                     "Rozmiar": row[5],
-                    "Cena przedaży": row[6],  # renamed from "Komis"
+                    "Cena sprzedaży": price_sale,  # renamed column
                     "Plik": os.path.basename(file_path)
                 }
                 data_entries.append(entry)
@@ -123,7 +135,7 @@ class InventoryApp:
     def load_files(self):
         """
         Allows the user to select Excel files, processes each file,
-         and stores the results. Then, it sorts the data numerically by the "Index" column,
+         and stores the results. Then, it sorts the data by the "Index" column,
          and updates both the detailed and summary tables.
         """
         file_paths = filedialog.askopenfilenames(
@@ -152,23 +164,26 @@ class InventoryApp:
         for row in self.details_tree.get_children():
             self.details_tree.delete(row)
         for entry in self.all_data:
+            # Format prices with 2 decimal places as string
+            price_purchase_str = f"{entry['Cena zakupu']:.2f}"
+            price_sale_str = f"{entry['Cena sprzedaży']:.2f}"
             self.details_tree.insert("", tk.END, values=(
                 entry["Towar"],
                 entry["Index"],
-                entry["Cena zakupu"],
+                price_purchase_str,
                 entry["Szt."],
                 entry["Rozmiar"],
-                entry["Cena przedaży"],
+                price_sale_str,
                 entry["Plik"]
             ))
 
     def generate_summary(self):
         """
         Groups data by the tuple (Index, Rozmiar, Towar) and sums the "Szt." values.
-         Also, sums the values for "Cena zakupu" and "Cena przedaży",
+         Also, sums the values for "Cena zakupu" and "Cena sprzedaży",
          and collects file names from which the entries came.
          Returns a list of dictionaries with keys: "Towar", "Index", "Cena zakupu", "Szt.",
-         "Rozmiar", "Cena przedaży", "Plik".
+         "Rozmiar", "Cena sprzedaży", "Plik".
         """
         summary = {}
         for entry in self.all_data:
@@ -179,22 +194,15 @@ class InventoryApp:
                     "Rozmiar": entry["Rozmiar"],
                     "Towar": entry["Towar"],
                     "Szt.": 0,
-                    "Cena zakupu": 0,
-                    "Cena przedaży": 0,
+                    "Cena zakupu": 0.0,
+                    "Cena sprzedaży": 0.0,
                     "Plik": set()  # Use a set to avoid duplicate file names
                 }
             summary[key]["Szt."] += entry["Szt."]
-            try:
-                summary[key]["Cena zakupu"] += float(entry["Cena zakupu"]) if entry["Cena zakupu"] is not None else 0
-            except (ValueError, TypeError):
-                pass
-            try:
-                summary[key]["Cena przedaży"] += float(entry["Cena przedaży"]) if entry[
-                                                                                      "Cena przedaży"] is not None else 0
-            except (ValueError, TypeError):
-                pass
+            summary[key]["Cena zakupu"] += entry["Cena zakupu"]
+            summary[key]["Cena sprzedaży"] += entry["Cena sprzedaży"]
             summary[key]["Plik"].add(entry["Plik"])
-        # Convert the file names set to a comma-separated string and transform the dictionary to a list
+        # Convert the file names set to a comma-separated string and transform to list
         result = []
         for key, data in summary.items():
             data["Plik"] = ", ".join(sorted(data["Plik"]))
@@ -206,26 +214,29 @@ class InventoryApp:
         for row in self.summary_tree.get_children():
             self.summary_tree.delete(row)
         summary_data = self.generate_summary()
-        # Sort summary by Index, then by Rozmiar, then by Towar
+        # Sort summary by Index, then Rozmiar, then Towar
         summary_data.sort(key=lambda x: (x["Index"], x["Rozmiar"], x["Towar"]))
         total_quantity = 0
-        total_purchase = 0
-        total_sale = 0
+        total_purchase = 0.0
+        total_sale = 0.0
         for entry in summary_data:
+            # Format prices with 2 decimals for display
+            price_purchase_str = f"{entry['Cena zakupu']:.2f}"
+            price_sale_str = f"{entry['Cena sprzedaży']:.2f}"
             self.summary_tree.insert("", tk.END, values=(
                 entry["Towar"],
                 entry["Index"],
-                entry["Cena zakupu"],
+                price_purchase_str,
                 entry["Szt."],
                 entry["Rozmiar"],
-                entry["Cena przedaży"],
+                price_sale_str,
                 entry["Plik"]
             ))
             total_quantity += entry["Szt."]
             total_purchase += entry["Cena zakupu"]
-            total_sale += entry["Cena przedaży"]
-        # Update the totals label at the bottom of the window
-        self.totals_label.config(text=f"Podsumowanie całkowite: Ilość = {total_quantity}, "
+            total_sale += entry["Cena sprzedaży"]
+        # Update totals label at the bottom
+        self.totals_label.config(text=f"Podsumowanie: Ilość = {total_quantity}, "
                                       f"Wartość zakupu = {total_purchase:.2f}, "
                                       f"Wartość sprzedaży = {total_sale:.2f}")
 
@@ -281,7 +292,6 @@ class InventoryApp:
             for child in self.details_tree.get_children():
                 row = self.details_tree.item(child)['values']
                 ws_details.append(row)
-            # Adjust column widths for the detailed sheet
             self.adjust_column_widths(ws_details)
 
             # Worksheet "Suma" with summary data
@@ -294,13 +304,12 @@ class InventoryApp:
                 ws_summary.append([
                     entry["Towar"],
                     entry["Index"],
-                    entry["Cena zakupu"],
+                    f"{entry['Cena zakupu']:.2f}",
                     entry["Szt."],
                     entry["Rozmiar"],
-                    entry["Cena przedaży"],
+                    f"{entry['Cena sprzedaży']:.2f}",
                     entry["Plik"]
                 ])
-            # Adjust column widths for the summary sheet
             self.adjust_column_widths(ws_summary)
 
             wb.save(save_path)
