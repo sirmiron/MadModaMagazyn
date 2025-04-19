@@ -29,13 +29,15 @@ class InventoryApp:
         details_label = tk.Label(details_frame, text="Szczegóły")
         details_label.pack(anchor="w")
 
-        # Detailed table columns: "Odzież" renamed to "Towar", Index as integer,
-        # prices are displayed with two decimals.
-        self.details_columns = ["Towar", "Index", "Cena zakupu", "Szt.", "Rozmiar", "Cena sprzedaży", "Plik"]
+        # Detailed table columns: added "Typ / column B"
+        self.details_columns = [
+            "Towar", "Typ", "Index", "Cena zakupu",
+            "Szt.", "Rozmiar", "Cena sprzedaży", "Plik"
+        ]
         self.details_tree = ttk.Treeview(details_frame, columns=self.details_columns, show="headings")
         for col in self.details_columns:
             self.details_tree.heading(col, text=col)
-            self.details_tree.column(col, width=100, anchor="w")  # left aligned
+            self.details_tree.column(col, width=100, anchor="w")
         self.details_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         details_scrollbar = tk.Scrollbar(details_frame, orient=tk.VERTICAL, command=self.details_tree.yview)
@@ -46,15 +48,18 @@ class InventoryApp:
         summary_frame = tk.Frame(master)
         summary_frame.pack(padx=10, pady=(5, 5), fill=tk.BOTH, expand=True)
 
-        summary_label = tk.Label(summary_frame, text="Podsumowanie (grupowanie po Index, Rozmiar i Towar)")
+        summary_label = tk.Label(summary_frame, text="Podsumowanie (grupowanie po Towar, Typ, Index i Rozmiar)")
         summary_label.pack(anchor="w")
 
-        # Summary table columns now in the same order as the detailed table.
-        self.summary_columns = ["Towar", "Index", "Cena zakupu", "Szt.", "Rozmiar", "Cena sprzedaży", "Plik"]
+        # Summary table columns: added "Typ"
+        self.summary_columns = [
+            "Towar", "Typ", "Index", "Cena zakupu",
+            "Szt.", "Rozmiar", "Cena sprzedaży", "Plik"
+        ]
         self.summary_tree = ttk.Treeview(summary_frame, columns=self.summary_columns, show="headings")
         for col in self.summary_columns:
             self.summary_tree.heading(col, text=col)
-            self.summary_tree.column(col, width=100, anchor="w")  # left aligned
+            self.summary_tree.column(col, width=100, anchor="w")
         self.summary_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         summary_scrollbar = tk.Scrollbar(summary_frame, orient=tk.VERTICAL, command=self.summary_tree.yview)
@@ -72,7 +77,7 @@ class InventoryApp:
         Displays a new window with a table of error details.
         The table contains columns: Plik, Wiersz, Komórka, Opis błędu, Wartość.
         If the error value is None, "Brak danych" is shown.
-        Adds centered buttons "Zapisz" (to export to Excel) and "Zamknij" (to close).
+        Adds centered buttons "Zapisz błędy" and "Zamknij okno".
         """
         if not error_list:
             return  # Do not show window if no errors
@@ -96,15 +101,11 @@ class InventoryApp:
         v_scroll.grid(row=0, column=1, sticky="ns")
         tree.configure(yscrollcommand=v_scroll.set)
 
-        # Ensure the frame expands properly
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
-        # Populate the tree with error data
         for err in error_list:
-            value = err.get("value")
-            if value is None:
-                value = "Brak danych"
+            value = err.get("value") if err.get("value") is not None else "Brak danych"
             tree.insert("", tk.END, values=(
                 err.get("file", ""),
                 err.get("row", ""),
@@ -116,12 +117,9 @@ class InventoryApp:
         # Frame for action buttons
         btn_frame = tk.Frame(error_window)
         btn_frame.pack(fill=tk.X, pady=(0, 10), padx=10)
-
-        # Configure grid to center buttons: columns 0 and 3 expand, buttons in 1 and 2
         btn_frame.grid_columnconfigure(0, weight=1)
         btn_frame.grid_columnconfigure(3, weight=1)
 
-        # "Zapisz" button: export errors to Excel
         save_btn = tk.Button(
             btn_frame,
             text="Zapisz błędy",
@@ -129,7 +127,6 @@ class InventoryApp:
         )
         save_btn.grid(row=0, column=1, padx=5)
 
-        # "Zamknij" button: close the error window
         close_btn = tk.Button(
             btn_frame,
             text="Zamknij okno",
@@ -140,9 +137,9 @@ class InventoryApp:
     def save_errors_to_excel(self, error_list):
         """
         Saves the list of error dicts to an Excel file.
-        Filename defaults to 'bledy_YYYY-MM-DD.xlsx'.
+        Filename defaults to 'YYYY-MM-DD_bledy_.xlsx'.
         """
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
+        today_str = date.today().strftime("%Y-%m-%d")
         default_filename = f"{today_str}_bledy_.xlsx"
 
         save_path = filedialog.asksaveasfilename(
@@ -159,15 +156,11 @@ class InventoryApp:
             ws = wb.active
             ws.title = "Błędy importu"
 
-            # Write header
             headers = ["Plik", "Wiersz", "Komórka", "Opis błędu", "Wartość"]
             ws.append(headers)
 
-            # Write rows
             for err in error_list:
-                value = err.get("value")
-                if value is None:
-                    value = "Brak danych"
+                value = err.get("value") if err.get("value") is not None else "Brak danych"
                 ws.append([
                     err.get("file", ""),
                     err.get("row", ""),
@@ -176,7 +169,6 @@ class InventoryApp:
                     value
                 ])
 
-            # Auto‑adjust column widths
             from openpyxl.utils import get_column_letter
             for col in ws.columns:
                 max_len = max(len(str(cell.value)) for cell in col)
@@ -196,13 +188,12 @@ class InventoryApp:
          - Adds a row only if:
              * The quantity ("Szt.") is greater than 0 and
              * The product name (column A) is not empty.
-         - Additionally, logs an error if column B is empty (regardless of product name).
+         - Additionally, logs an error if column B is empty.
          - Renames the column "Komis" to "Cena sprzedaży".
          - If the value in column "Index" (cell C) is not numeric, it is set to 0 and logged.
          - Converts "Index" to an integer.
          - Converts "Cena zakupu" and "Cena sprzedaży" to floats (rounded to 2 decimals).
-         - Any conversion or missing‑value error in a row is recorded with row number,
-           cell coordinate, description and the raw value.
+         - Any conversion or missing‑value error in a row is recorded.
         """
         data_entries = []
         error_messages = []
@@ -210,7 +201,10 @@ class InventoryApp:
             wb = openpyxl.load_workbook(file_path, data_only=True)
             ws = wb.active
         except Exception as e:
-            messagebox.showerror("Błąd", f"Nie udało się otworzyć pliku:\n{file_path}\n{e}")
+            messagebox.showerror(
+                "Błąd",
+                f"Nie udało się otworzyć pliku:\n{file_path}\n{e}"
+            )
             return data_entries, error_messages
 
         inventory_date = ws['G2'].value
@@ -220,19 +214,17 @@ class InventoryApp:
         for row in ws.iter_rows(min_row=5):
             row_num = row[0].row
             try:
-                product_name = row[0].value  # column A
-                col_b_value = row[1].value  # column B
-                quantity = row[4].value  # column E
+                product_name = row[0].value      # column A
+                col_b_value  = row[1].value      # column B
+                quantity     = row[4].value      # column E
             except IndexError:
                 continue
 
-            # only process if quantity > 0 and product_name present
             if not (isinstance(quantity, (int, float)) and quantity > 0):
                 continue
             if not (product_name and str(product_name).strip()):
                 continue
 
-            # NEW: log error if column B empty
             if not (col_b_value and str(col_b_value).strip()):
                 error_messages.append({
                     "file": os.path.basename(file_path),
@@ -242,7 +234,6 @@ class InventoryApp:
                     "value": col_b_value
                 })
 
-            # INDEX (col C) conversion
             try:
                 index_val = int(float(row[2].value))
             except (ValueError, TypeError):
@@ -255,7 +246,6 @@ class InventoryApp:
                 })
                 index_val = 0
 
-            # PURCHASE PRICE (col D)
             try:
                 price_purchase = round(float(row[3].value), 2)
             except (ValueError, TypeError):
@@ -268,7 +258,6 @@ class InventoryApp:
                 })
                 price_purchase = 0.0
 
-            # SALE PRICE (col G)
             try:
                 price_sale = round(float(row[6].value), 2)
             except (ValueError, TypeError):
@@ -283,6 +272,7 @@ class InventoryApp:
 
             entry = {
                 "Towar": product_name,
+                "Typ": col_b_value,
                 "Index": index_val,
                 "Cena zakupu": price_purchase,
                 "Szt.": quantity,
@@ -297,8 +287,7 @@ class InventoryApp:
     def load_files(self):
         """
         Allows the user to select Excel files, processes each file,
-         and aggregates the results and errors. Then, it sorts the data by the "Index" column,
-         and updates both the detailed and summary tables.
+        aggregates results and errors, then updates both tables.
         """
         file_paths = filedialog.askopenfilenames(
             title="Wybierz pliki Excel",
@@ -318,7 +307,10 @@ class InventoryApp:
             self.display_error_table(all_errors)
 
         if not self.all_data:
-            messagebox.showinfo("Informacja", "Nie znaleziono żadnych pozycji spełniających warunki.")
+            messagebox.showinfo(
+                "Informacja",
+                "Nie znaleziono żadnych pozycji spełniających warunki."
+            )
             return
 
         self.all_data.sort(key=lambda entry: entry["Index"])
@@ -334,6 +326,7 @@ class InventoryApp:
             price_sale_str = f"{entry['Cena sprzedaży']:.2f}"
             self.details_tree.insert("", tk.END, values=(
                 entry["Towar"],
+                entry["Typ"],
                 entry["Index"],
                 price_purchase_str,
                 entry["Szt."],
@@ -344,31 +337,29 @@ class InventoryApp:
 
     def generate_summary(self):
         """
-        Groups data by the tuple (Index, Rozmiar, Towar) and sums the "Szt." values.
-         Also, sums the values for "Cena zakupu" and "Cena sprzedaży",
-         and collects file names from which the entries came.
-         Returns a list of dictionaries with keys: "Towar", "Index", "Cena zakupu", "Szt.",
-         "Rozmiar", "Cena sprzedaży", "Plik".
+        Groups data by (Towar, Typ, Index, Rozmiar) and sums quantities and values.
         """
         summary = {}
         for entry in self.all_data:
-            key = (entry["Index"], entry["Rozmiar"], entry["Towar"])
+            key = (entry["Towar"], entry["Typ"], entry["Index"], entry["Rozmiar"])
             if key not in summary:
                 summary[key] = {
+                    "Towar": entry["Towar"],
+                    "Typ": entry["Typ"],
                     "Index": entry["Index"],
                     "Rozmiar": entry["Rozmiar"],
-                    "Towar": entry["Towar"],
                     "Szt.": 0,
                     "Cena zakupu": 0.0,
                     "Cena sprzedaży": 0.0,
-                    "Plik": set()  # Use a set to avoid duplicate file names
+                    "Plik": set()
                 }
             summary[key]["Szt."] += entry["Szt."]
             summary[key]["Cena zakupu"] += entry["Cena zakupu"]
             summary[key]["Cena sprzedaży"] += entry["Cena sprzedaży"]
             summary[key]["Plik"].add(entry["Plik"])
+
         result = []
-        for key, data in summary.items():
+        for data in summary.values():
             data["Plik"] = ", ".join(sorted(data["Plik"]))
             result.append(data)
         return result
@@ -380,50 +371,45 @@ class InventoryApp:
                 self.summary_tree.delete(row)
 
             summary_data = self.generate_summary()
-
-            # Sort summary data using Index, Rozmiar (as string) and Towar.
-            try:
-                summary_data.sort(key=lambda x: (x["Index"], str(x.get("Rozmiar", "")), x["Towar"]))
-            except Exception as sort_error:
-                messagebox.showerror("Błąd sortowania", f"Nie udało się posortować danych podsumowania:\n{sort_error}")
-                return
+            summary_data.sort(key=lambda x: (
+                x["Towar"], str(x["Typ"]), x["Index"], x["Rozmiar"]
+            ))
 
             total_quantity = 0
             total_purchase = 0.0
             total_sale = 0.0
             for entry in summary_data:
-                try:
-                    price_purchase_str = f"{entry['Cena zakupu']:.2f}"
-                except Exception:
-                    price_purchase_str = "0.00"
-                try:
-                    price_sale_str = f"{entry['Cena sprzedaży']:.2f}"
-                except Exception:
-                    price_sale_str = "0.00"
+                price_purchase_str = f"{entry['Cena zakupu']:.2f}"
+                price_sale_str = f"{entry['Cena sprzedaży']:.2f}"
 
                 self.summary_tree.insert("", tk.END, values=(
-                    entry.get("Towar", ""),
-                    entry.get("Index", 0),
+                    entry["Towar"],
+                    entry["Typ"],
+                    entry["Index"],
                     price_purchase_str,
-                    entry.get("Szt.", 0),
-                    entry.get("Rozmiar", ""),
+                    entry["Szt."],
+                    entry["Rozmiar"],
                     price_sale_str,
-                    entry.get("Plik", "")
+                    entry["Plik"]
                 ))
-                total_quantity += entry.get("Szt.", 0)
-                total_purchase += entry.get("Cena zakupu", 0.0)
-                total_sale += entry.get("Cena sprzedaży", 0.0)
 
-            self.totals_label.config(text=f"Podsumowanie: Ilość = {total_quantity}, "
-                                          f"Wartość zakupu = {total_purchase:.2f}, "
-                                          f"Wartość sprzedaży = {total_sale:.2f}")
+                total_quantity += entry["Szt."]
+                total_purchase += entry["Cena zakupu"]
+                total_sale += entry["Cena sprzedaży"]
+
+            self.totals_label.config(
+                text=(
+                    f"Podsumowanie: Ilość = {total_quantity}, "
+                    f"Wartość zakupu = {total_purchase:.2f}, "
+                    f"Wartość sprzedaży = {total_sale:.2f}"
+                )
+            )
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się zaktualizować podsumowania:\n{e}")
 
     def adjust_column_widths(self, worksheet):
         """
-        Adjusts the column widths in the given worksheet based on the maximum length
-        of the content in each column.
+        Adjusts column widths based on the maximum content length.
         """
         from openpyxl.utils import get_column_letter
         for col in worksheet.columns:
@@ -440,10 +426,9 @@ class InventoryApp:
     def save_to_excel(self):
         """
         Saves the data displayed in both tables to an Excel file.
-         The first worksheet ("Szczegóły") contains the detailed data,
-         and the second worksheet ("Suma") contains the summary data.
-         The default filename is "stan_magazynu_YYYY-MM-DD.xlsx".
-         Column widths are automatically adjusted.
+        The first sheet ("Szczegóły") has detailed data,
+        the second ("Suma") has the summary.
+        Filename: 'stan_magazynu_YYYY-MM-DD.xlsx'.
         """
         if not self.details_tree.get_children():
             messagebox.showwarning("Brak danych", "Brak danych do zapisu. Najpierw przetwórz pliki.")
@@ -464,25 +449,25 @@ class InventoryApp:
             from openpyxl import Workbook
             wb = Workbook()
 
-            # Worksheet "Szczegóły" with detailed data
+            # Szczegóły
             ws_details = wb.active
             ws_details.title = "Szczegóły"
-            headers_details = self.details_columns
-            ws_details.append(headers_details)
+            ws_details.append(self.details_columns)
             for child in self.details_tree.get_children():
-                row = self.details_tree.item(child)['values']
-                ws_details.append(row)
+                ws_details.append(self.details_tree.item(child)['values'])
             self.adjust_column_widths(ws_details)
 
-            # Worksheet "Suma" with summary data
+            # Suma
             ws_summary = wb.create_sheet(title="Suma")
-            headers_summary = self.summary_columns
-            ws_summary.append(headers_summary)
+            ws_summary.append(self.summary_columns)
             summary_data = self.generate_summary()
-            summary_data.sort(key=lambda x: (x["Index"], str(x.get("Rozmiar", "")), x["Towar"]))
+            summary_data.sort(key=lambda x: (
+                x["Towar"], str(x["Typ"]), x["Index"], x["Rozmiar"]
+            ))
             for entry in summary_data:
                 ws_summary.append([
                     entry["Towar"],
+                    entry["Typ"],
                     entry["Index"],
                     f"{entry['Cena zakupu']:.2f}",
                     entry["Szt."],
