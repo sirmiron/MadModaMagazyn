@@ -70,22 +70,22 @@ class InventoryApp:
     def display_error_table(self, error_list):
         """
         Displays a new window with a table of error details.
-        The table contains columns: Plik, Komórka, Opis błędu, Wartość.
+        The table contains columns: Plik, Wiersz, Komórka, Opis błędu, Wartość.
         If the error value is None, "Brak danych" is shown.
-        A "Zamknij" button is added to close the window.
+        Adds centered buttons "Zapisz" (to export to Excel) and "Zamknij" (to close).
         """
         if not error_list:
             return  # Do not show window if no errors
 
         error_window = tk.Toplevel(self.master)
         error_window.title("Błędy importu danych")
-        error_window.geometry("800x400")
+        error_window.geometry("800x450")
 
-        # Create a frame to hold the tree and scrollbar together using grid
+        # Create a frame to hold the tree and scrollbar
         frame = tk.Frame(error_window)
-        frame.pack(fill=tk.BOTH, expand=True)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        columns = ("Plik", "Komórka", "Opis błędu", "Wartość")
+        columns = ("Plik", "Wiersz", "Komórka", "Opis błędu", "Wartość")
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         for col in columns:
             tree.heading(col, text=col)
@@ -100,20 +100,93 @@ class InventoryApp:
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
+        # Populate the tree with error data
         for err in error_list:
             value = err.get("value")
             if value is None:
                 value = "Brak danych"
             tree.insert("", tk.END, values=(
                 err.get("file", ""),
+                err.get("row", ""),
                 err.get("col", ""),
                 err.get("error", ""),
                 value
             ))
 
-        # Add a button to close the error window
-        close_button = tk.Button(error_window, text="Zamknij", command=error_window.destroy)
-        close_button.pack(pady=10)
+        # Frame for action buttons
+        btn_frame = tk.Frame(error_window)
+        btn_frame.pack(fill=tk.X, pady=(0, 10), padx=10)
+
+        # Configure grid to center buttons: columns 0 and 3 expand, buttons in 1 and 2
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(3, weight=1)
+
+        # "Zapisz" button: export errors to Excel
+        save_btn = tk.Button(
+            btn_frame,
+            text="Zapisz błędy",
+            command=lambda: self.save_errors_to_excel(error_list)
+        )
+        save_btn.grid(row=0, column=1, padx=5)
+
+        # "Zamknij" button: close the error window
+        close_btn = tk.Button(
+            btn_frame,
+            text="Zamknij okno",
+            command=error_window.destroy
+        )
+        close_btn.grid(row=0, column=2, padx=5)
+
+    def save_errors_to_excel(self, error_list):
+        """
+        Saves the list of error dicts to an Excel file.
+        Filename defaults to 'bledy_YYYY-MM-DD.xlsx'.
+        """
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
+        default_filename = f"{today_str}_bledy_.xlsx"
+
+        save_path = filedialog.asksaveasfilename(
+            title="Zapisz błędy do pliku Excel",
+            initialfile=default_filename,
+            defaultextension=".xlsx",
+            filetypes=[("Pliki Excel", "*.xlsx")]
+        )
+        if not save_path:
+            return
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Błędy importu"
+
+            # Write header
+            headers = ["Plik", "Wiersz", "Komórka", "Opis błędu", "Wartość"]
+            ws.append(headers)
+
+            # Write rows
+            for err in error_list:
+                value = err.get("value")
+                if value is None:
+                    value = "Brak danych"
+                ws.append([
+                    err.get("file", ""),
+                    err.get("row", ""),
+                    err.get("col", ""),
+                    err.get("error", ""),
+                    value
+                ])
+
+            # Auto‑adjust column widths
+            from openpyxl.utils import get_column_letter
+            for col in ws.columns:
+                max_len = max(len(str(cell.value)) for cell in col)
+                ws.column_dimensions[get_column_letter(col[0].column)].width = max_len + 2
+
+            wb.save(save_path)
+            messagebox.showinfo("Sukces", f"Błędy zapisano do pliku:\n{save_path}")
+
+        except Exception as e:
+            messagebox.showerror("Błąd zapisu", f"Nie udało się zapisać pliku:\n{e}")
 
     def process_file(self, file_path):
         """
