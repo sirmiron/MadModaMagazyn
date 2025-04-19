@@ -196,18 +196,17 @@ class InventoryApp:
          - Adds a row only if:
              * The quantity ("Szt.") is greater than 0 and
              * The product name (column A) is not empty.
+         - Additionally, logs an error if column B is empty (regardless of product name).
          - Renames the column "Komis" to "Cena sprzedaży".
-         - If the value in column "Index" (cell C) is not numeric, it is set to 0.
+         - If the value in column "Index" (cell C) is not numeric, it is set to 0 and logged.
          - Converts "Index" to an integer.
          - Converts "Cena zakupu" and "Cena sprzedaży" to floats (rounded to 2 decimals).
-
-         Additionally, any conversion error in a row is recorded with row number,
-         cell coordinates, opis błędu oraz wartość.
+         - Any conversion or missing‑value error in a row is recorded with row number,
+           cell coordinate, description and the raw value.
         """
         data_entries = []
         error_messages = []
         try:
-            # Do not use values_only to get cell objects for coordinates.
             wb = openpyxl.load_workbook(file_path, data_only=True)
             ws = wb.active
         except Exception as e:
@@ -218,19 +217,32 @@ class InventoryApp:
         if isinstance(inventory_date, (datetime.datetime, datetime.date)):
             inventory_date = inventory_date.strftime("%d-%m-%Y")
 
-        for row in ws.iter_rows(min_row=5):  # iterate over cell objects
-            row_num = row[0].row  # get current row number
+        for row in ws.iter_rows(min_row=5):
+            row_num = row[0].row
             try:
-                product_name = row[0].value
-                quantity = row[4].value
+                product_name = row[0].value  # column A
+                col_b_value = row[1].value  # column B
+                quantity = row[4].value  # column E
             except IndexError:
                 continue
 
-            if not (quantity is not None and isinstance(quantity, (int, float)) and quantity > 0):
+            # only process if quantity > 0 and product_name present
+            if not (isinstance(quantity, (int, float)) and quantity > 0):
                 continue
-            if not (product_name is not None and str(product_name).strip() != ""):
+            if not (product_name and str(product_name).strip()):
                 continue
 
+            # NEW: log error if column B empty
+            if not (col_b_value and str(col_b_value).strip()):
+                error_messages.append({
+                    "file": os.path.basename(file_path),
+                    "row": row_num,
+                    "col": row[1].coordinate,
+                    "error": "Brak wartości w kolumnie B",
+                    "value": col_b_value
+                })
+
+            # INDEX (col C) conversion
             try:
                 index_val = int(float(row[2].value))
             except (ValueError, TypeError):
@@ -243,6 +255,7 @@ class InventoryApp:
                 })
                 index_val = 0
 
+            # PURCHASE PRICE (col D)
             try:
                 price_purchase = round(float(row[3].value), 2)
             except (ValueError, TypeError):
@@ -255,6 +268,7 @@ class InventoryApp:
                 })
                 price_purchase = 0.0
 
+            # SALE PRICE (col G)
             try:
                 price_sale = round(float(row[6].value), 2)
             except (ValueError, TypeError):
@@ -268,16 +282,16 @@ class InventoryApp:
                 price_sale = 0.0
 
             entry = {
-                "Towar": product_name,  # renamed from "Odzież"
+                "Towar": product_name,
                 "Index": index_val,
                 "Cena zakupu": price_purchase,
                 "Szt.": quantity,
                 "Rozmiar": row[5].value,
-                "Cena sprzedaży": price_sale,  # renamed column
+                "Cena sprzedaży": price_sale,
                 "Plik": os.path.basename(file_path)
             }
             data_entries.append(entry)
-        # Do not display errors here; they will be aggregated in load_files.
+
         return data_entries, error_messages
 
     def load_files(self):
